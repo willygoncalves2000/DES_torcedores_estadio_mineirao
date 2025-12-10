@@ -498,6 +498,98 @@ Para cada evento na FEL (ordenada por tempo):
   - Todos os 50.000 torcedores passaram pelas catracas, OU
   - Não há mais eventos na FEL
 
+### 🕒 Ordenação Cronológica dos Eventos
+
+#### **Implementação da Future Event List (FEL)**
+
+O sistema utiliza uma **Min-Heap** para garantir que todos os eventos sejam processados em ordem cronológica perfeita:
+
+**Estrutura Central:**
+```python
+class FutureEventList:
+    def __init__(self):
+        self._eventos = []        # Lista usada como heap binário
+        self._contador = 0        # Contador para quebrar empates FIFO
+```
+
+**Chave de Ordenação Tripla:**
+```python
+def agendar(self, tempo, tipo, torcedor_id, dados=None):
+    evento = Evento(tempo, tipo, torcedor_id, dados)
+    heapq.heappush(self._eventos, (tempo, self._contador, evento))
+    #                               ↑        ↑           ↑
+    #                          1ª prioridade  2ª prioridade  Objeto
+    self._contador += 1
+```
+
+**Critérios de Ordenação:**
+1. **Tempo de ocorrência** - menor tempo = ocorre primeiro no tempo = maior prioridade
+2. **Contador sequencial** - ordem FIFO para empates de tempo  
+3. **Objeto evento** - não usado para comparação
+
+#### **Exemplo Prático de Ordenação**
+
+**Estado da FEL durante execução:**
+```python
+# Após agendar chegadas e alguns eventos de revista:
+_eventos = [
+    (-3600.0, 0, Evento(CHEGADA, id=1)),           # Primeiro evento
+    (-3595.2, 1, Evento(CHEGADA, id=2)),           # Segunda chegada
+    (-3580.1, 2, Evento(CHEGADA, id=3)),           # Terceira chegada  
+    (-3576.5, 50000, Evento(FIM_REVISTA, id=1)),   # Fim da primeira revista
+    (-3570.8, 50001, Evento(FIM_REVISTA, id=2)),   # Fim da segunda revista
+    # ... heap mantém ordenação automática ...
+]
+
+# Processamento sequencial garantido:
+# 1º: (-3600.0, 0, CHEGADA id=1)      ← Menor tempo absoluto
+# 2º: (-3595.2, 1, CHEGADA id=2)      ← Segundo menor tempo
+# 3º: (-3580.1, 2, CHEGADA id=3)      ← Terceiro menor tempo  
+# 4º: (-3576.5, 50000, FIM_REVISTA)   ← Quarto menor tempo
+# 5º: (-3570.8, 50001, FIM_REVISTA)   ← Quinto menor tempo
+```
+
+**Resolução de Empates:**
+```python
+# Caso dois eventos tenham exatamente o mesmo tempo:
+heapq.heappush(eventos, (100.0, 5, evento_A))  # Inserido primeiro (contador=5)
+heapq.heappush(eventos, (100.0, 6, evento_B))  # Inserido depois (contador=6)
+
+# Resultado: evento_A processado antes de evento_B (ordem FIFO)
+# Mesmo tendo tempo idêntico (100.0 segundos)
+```
+
+**Garantias da Implementação:**
+- ✅ **Tempo nunca retrocede**: `tempo_atual` sempre aumenta
+- ✅ **Ordem determinística**: Empates resolvidos por ordem de inserção
+- ✅ **Eficiência O(log n)**: Inserção e remoção otimizadas
+- ✅ **Robustez**: Impossível processar eventos fora de ordem
+
+**Timeline Exemplo Real:**
+```
+Tempo -3600.0s: Torcedor 001 chega → agenda FIM_REVISTA para -3576.5s
+Tempo -3595.2s: Torcedor 002 chega → agenda FIM_REVISTA para -3570.8s  
+Tempo -3580.1s: Torcedor 003 chega → vai para fila (sem agente livre)
+Tempo -3576.5s: Torcedor 001 termina revista → agenda CHEGADA_PORTAO
+                 Torcedor 003 sai da fila → agenda FIM_REVISTA para -3552.1s
+Tempo -3570.8s: Torcedor 002 termina revista → agenda CHEGADA_PORTAO
+...
+```
+
+#### **Relógio de Simulação**
+
+```python
+def proximo_evento(self) -> Optional[Evento]:
+    evento = self.fel.proximo_evento()
+    if evento:
+        # Tempo sempre avança monotonicamente
+        self.tempo_atual = evento.tempo  
+        self.eventos_processados += 1
+    return evento
+```
+
+Esta implementação garante **matematicamente** que todos os eventos são processados em ordem cronológica estrita, respeitando a causalidade temporal do sistema real!
+
 #### 5. **Coleta de Estatísticas**
 Durante toda a simulação, são coletadas:
 - Tamanhos máximos das filas
